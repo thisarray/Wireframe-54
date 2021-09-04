@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>crazygolf</title>
+  <script src="../../jsgame0.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+#original {
+  margin-left: 1em;
+}
+  </style>
+</head>
+
+<body>
+<section id="imageLoader" class="hidden">
+  <img class="hidden" src="images/background.png" alt="background" data-name="background">
+  <img class="hidden" src="images/ball.png" alt="ball" data-name="ball">
+  <img class="hidden" src="images/collision.png" alt="collision" data-name="collision">
+  <img class="hidden" src="images/pointer.png" alt="pointer" data-name="pointer">
+</section>
+
+<main>
+<h1>crazygolf</h1>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<h2>Attribution</h2>
+
+<p><a href="https://wireframe.raspberrypi.org/issues/54">Code a Spectrum-style crazy golf game, pages 64-65, by Mark Vanstone</a>.</p>
+
+<p>Licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/3.0/legalcode">Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported</a>.</p>
+
+<p><a href="https://www.raspberrypi.org/blog/code-a-spectrum-style-crazy-golf-game-wireframe-54/">Blog post of Source Code</a>.</p>
+
+<h2>Original Python code</h2>
+
+<pre id="original"><code>
+# Crazy Golf
+import pgzrun
+import math
+from pygame import image, Color
+
+collisionMap = image.load(&#x27;images/collision.png&#x27;)
+pointer = Actor(&#x27;pointer&#x27;,center=(90,85))
+pointer.angle = 0
+ball = Actor(&#x27;ball&#x27;, center=(100,150))
+ball.speed = ball.dir = 0
+gamestate = shots = 0
+shotrange = 300
+
+def draw():
+    screen.blit(&quot;background&quot;, (0, 0))
+    ball.draw()
+    pointer.draw()
+    screen.draw.filled_rect(Rect((180,5),(shotrange,10)),(255,0,0))
+    screen.draw.text(&quot;SHOT RANGE:&quot;, topleft = (20, 2),color=(0,0,0) , fontsize=28)
+    if gamestate == 1 : screen.draw.text(&quot;YOU SUNK THE BALL IN &quot; + str(shots) + &quot; STROKES&quot;, center = (400, 300), owidth=0.5, ocolor=(255,255,0), color=(255,0,0) , fontsize=50)
+
+def update():
+    global shotrange
+    if gamestate == 0:
+        if keyboard.left:
+            pointer.angle += 5
+        if keyboard.right:
+            pointer.angle -= 5
+        if keyboard.up:
+            shotrange = limit(shotrange + 10, 0, 600)
+        if keyboard.down:
+            shotrange = limit(shotrange - 10, 0, 600)
+        checkBounce()
+        moveBall()
+        ball.speed = limit(ball.speed-0.01, 0, 10)
+
+def on_key_down(key):
+    if gamestate == 0:
+        if key.name == &quot;RETURN&quot;: hitBall(pointer.angle,shotrange/100)
+
+def hitBall(a,s):
+    global shots
+    ball.speed = s
+    ball.dir = math.radians(a)
+    shots += 1
+
+def moveBall():
+    ball.x += ball.speed * math.sin(ball.dir)
+    ball.y += ball.speed * math.cos(ball.dir)
+
+def checkBounce():
+    global gamestate
+    rgb = collisionCheck()
+    if rgb == Color(&quot;black&quot;):
+        gamestate = 1
+
+def collisionCheck():
+    r = 4
+    cl = [(0,-r),(r,0),(0,r),(-r,0)]
+    for t in range(4):
+        rgb = collisionMap.get_at((int(ball.x)+cl[t][0],int(ball.y)+cl[t][1]))
+        if rgb != Color(&quot;white&quot;):
+            if rgb == Color(&quot;blue&quot;):
+                ball.dir = (2*math.pi - ball.dir)%(2*math.pi)
+            if rgb == Color(&quot;red&quot;):
+                ball.dir = (3*math.pi - ball.dir)%(2*math.pi)
+    return rgb
+
+def limit(n, minn, maxn):
+    return max(min(maxn, n), minn)
+
+pgzrun.go()
+</code></pre>
+</main>
+
+<script>
+// Crazy Golf
+
+var collisionMap, pointer, ball, gamestate, shots, shotrange;
+
+function reset() {
+  screen.blit('collision', [0, 0]);
+  collisionMap = screen.getSurface();
+  pointer = new Actor('pointer');
+  pointer.center = [90, 85];
+  pointer.angle = 0;
+  ball = new Actor('ball');
+  ball.center = [100, 150];
+  ball.speed = 0;
+  ball.dir = 0;
+  gamestate = 0;
+  shots = 0;
+  shotrange = 300;
+}
+
+function draw() {
+  screen.blit("background", [0, 0]);
+  ball.draw();
+  pointer.draw();
+  screen.draw.filled_rect(new Rect([180, 5], [shotrange, 10]), [255, 0, 0]);
+  screen.draw.text("SHOT RANGE:", {
+    topleft: [20, 2],
+    color: [0, 0, 0],
+    fontsize: 28
+  });
+  if (gamestate === 1) {
+    screen.draw.text(`YOU SUNK THE BALL IN ${ shots } STROKES`, {
+      center: [400, 300],
+      owidth: 0.5,
+      ocolor: [255, 255, 0],
+      color: [255, 0, 0],
+      fontsize: 50
+    });
+  }
+}
+
+function update() {
+  if (gamestate === 0) {
+    if (keyboard[keys.LEFT]) {
+      pointer.angle += 5;
+    }
+    if (keyboard[keys.RIGHT]) {
+      pointer.angle -= 5;
+    }
+    if (keyboard[keys.UP]) {
+      shotrange = limit(shotrange + 10, 0, 600);
+    }
+    if (keyboard[keys.DOWN]) {
+      shotrange = limit(shotrange - 10, 0, 600);
+    }
+    checkBounce();
+    moveBall();
+    ball.speed = limit(ball.speed - 0.01, 0, 10);
+  }
+}
+
+function on_key_down(key) {
+  if (gamestate === 0) {
+    if (keyboard[keys.RETURN]) {
+      hitBall(pointer.angle, shotrange / 100);
+    }
+  }
+}
+
+function hitBall(a, s) {
+  ball.speed = s;
+  ball.dir = a * Math.PI / 180;
+  shots += 1;
+}
+
+function moveBall() {
+  ball.posx += ball.speed * Math.sin(ball.dir);
+  ball.posy += ball.speed * Math.cos(ball.dir);
+}
+
+function checkBounce() {
+  let rgb = collisionCheck();
+  if (Surface.isColorEqual(rgb, [0, 0, 0])) {
+    gamestate = 1;
+  }
+}
+
+function collisionCheck() {
+  let r = 4,
+      cl = [[0, -r], [r, 0], [0, r], [-r, 0]],
+      rgb;
+  for (let t = 0; t < 4; t++) {
+    rgb = collisionMap.getAt(Math.trunc(ball.posx) + cl[t][0], Math.trunc(ball.posy) + cl[t][1]);
+    if (!Surface.isColorEqual(rgb, [255, 255, 255])) {
+      if (Surface.isColorEqual(rgb, [0, 0, 255])) {
+        ball.dir = ((2 * Math.PI) - ball.dir) % (2 * Math.PI);
+      }
+      if (Surface.isColorEqual(rgb, [255, 0, 0])) {
+        ball.dir = ((3 * Math.PI) - ball.dir) % (2 * Math.PI);
+      }
+    }
+  }
+  return rgb;
+}
+
+function limit(n, minn, maxn) {
+  return Math.max(Math.min(maxn, n), minn);
+}
+
+window.addEventListener('load', (event) => {
+  images.LOAD('#imageLoader img');
+  // Non-standard order for Surface
+  screen.set_mode('#screen', '#reset', '#pause');
+  reset();
+  screen.draw.playButton();
+});
+</script>
+</body>
+
+</html>
