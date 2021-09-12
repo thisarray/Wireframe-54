@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test opcode</title>
+  <script src="../../../jsgame0.js"></script>
+  <script src="test.js"></script>
+  <script src="chip8.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>Test opcode</h1>
+</main>
+
+<script>
+function test_constants() {
+  test.assertEqual(RAM_SIZE, 0xFFF + 1);
+  test.assertEqual(OPCODE_SIZE, 2);
+  test.assertEqual(START_ADDRESS, 0x200);
+  test.assertEqual(REGISTER_COUNT, 16);
+  test.assertEqual(DISPLAY_WIDTH, 64);
+  test.assertEqual(DISPLAY_HEIGHT, 32);
+  test.assertEqual(FONT.length, 16 * 5);
+  test.assertEqual(FONT_SIZE, 5);
+}
+
+function test_bad_word() {
+  let opcode;
+  try {
+    opcode = new Opcode('foobar');
+    console.assert(false, 'TypeError not raised.');
+  }
+  catch (error) {
+    test.assertTrue(error instanceof TypeError);
+  }
+}
+
+function test_opcode() {
+  let opcode;
+  for (let word of [0x1234, 0xA1234, 0xBC1234, 0xDEF1234]) {
+    opcode = new Opcode(word);
+    test.assertEqual(opcode.word, 0x1234);
+    test.assertEqual(opcode.a, 0x1);
+    test.assertEqual(opcode.n, 0x4);
+    test.assertEqual(opcode.nn, 0x34);
+    test.assertEqual(opcode.nnn, 0x234);
+    test.assertEqual(opcode.x, 0x2);
+    test.assertEqual(opcode.y, 0x3);
+  }
+  for (let word of [0xABCD, 0x1ABCD, 0x23ABCD, 0x456ABCD]) {
+    opcode = new Opcode(word);
+    test.assertEqual(opcode.word, 0xABCD);
+    test.assertEqual(opcode.a, 0xA);
+    test.assertEqual(opcode.n, 0xD);
+    test.assertEqual(opcode.nn, 0xCD);
+    test.assertEqual(opcode.nnn, 0xBCD);
+    test.assertEqual(opcode.x, 0xB);
+    test.assertEqual(opcode.y, 0xC);
+  }
+}
+
+test.main();
+</script>
+</body>
+
+</html>
