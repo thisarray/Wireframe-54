@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test emulator</title>
+  <script src="../../../jsgame0.js"></script>
+  <script src="test.js"></script>
+  <script src="chip8.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>Test emulator</h1>
+</main>
+
+<script>
+function test_sanity() {
+  let emulator = new Emulator();
+
+  for (let i = 0; i < FONT.length; i++) {
+    test.assertEqual(emulator.memory[i], FONT[i]);
+  }
+  for (let i = FONT.length; i < RAM_SIZE; i++) {
+    test.assertEqual(emulator.memory[i], 0);
+  }
+
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+
+  // Test registers are empty
+  for (let i = 0; i < REGISTER_COUNT; i++) {
+    test.assertEqual(emulator.register[i], 0);
+  }
+
+  test.assertEqual(emulator.address, 0);
+  test.assertEqual(emulator.delayTimer, 0);
+  test.assertEqual(emulator.soundTimer, 0);
+  test.assertEqual(emulator.keys.size, 0);
+  test.assertEqual(emulator.stack, []);
+
+  for (let x = 0; x < DISPLAY_WIDTH; x++) {
+    for (let y = 0; y < DISPLAY_HEIGHT; y++) {
+      test.assertFalse(emulator.frameBuffer[x][y]);
+    }
+  }
+}
+
+function test_load() {
+  let emulator = new Emulator(),
+      zeroes = (new Array(FONT.length)).fill(0);
+  test.assertRaises(TypeError, emulator.load.bind(emulator), FONT, 'foobar');
+  test.assertRaises(RangeError, emulator.load.bind(emulator), FONT, -1);
+
+  // Test FONT has been loaded
+  for (let i = 0; i < FONT.length; i++) {
+    test.assertEqual(emulator.memory[i], FONT[i]);
+  }
+
+  for (let start of [20, 10, 0]) {
+    emulator.load(zeroes, start);
+    for (let i = 0; i < start; i++) {
+      test.assertEqual(emulator.memory[i], FONT[i]);
+    }
+    for (let i = start; i < FONT.length; i++) {
+      test.assertEqual(emulator.memory[i], 0);
+    }
+  }
+  test.assertTrue(emulator.memory.every(b => (b === 0)));
+}
+
+function test_advanceProgramCounter() {
+  let emulator = new Emulator();
+  for (let i = START_ADDRESS; i < (RAM_SIZE - OPCODE_SIZE); i = i + OPCODE_SIZE) {
+    test.assertEqual(emulator.programCounter, i);
+    emulator.advanceProgramCounter();
+  }
+  test.assertEqual(emulator.programCounter, RAM_SIZE - OPCODE_SIZE);
+  test.assertRaises(RangeError, emulator.advanceProgramCounter.bind(emulator));
+}
+
+function test_decrementTimers() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.delayTimer, 0);
+  test.assertEqual(emulator.soundTimer, 0);
+  emulator.decrementTimers();
+  test.assertEqual(emulator.delayTimer, 0);
+  test.assertEqual(emulator.soundTimer, 0);
+  emulator.delayTimer = 4;
+  emulator.soundTimer = 2;
+  emulator.decrementTimers();
+  test.assertEqual(emulator.delayTimer, 3);
+  test.assertEqual(emulator.soundTimer, 1);
+  emulator.decrementTimers();
+  test.assertEqual(emulator.delayTimer, 2);
+  test.assertEqual(emulator.soundTimer, 0);
+  emulator.decrementTimers();
+  test.assertEqual(emulator.delayTimer, 1);
+  test.assertEqual(emulator.soundTimer, 0);
+  emulator.decrementTimers();
+  test.assertEqual(emulator.delayTimer, 0);
+  test.assertEqual(emulator.soundTimer, 0);
+  emulator.decrementTimers();
+  test.assertEqual(emulator.delayTimer, 0);
+  test.assertEqual(emulator.soundTimer, 0);
+}
+
+function test_getOpcode() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.getOpcode().word, 0);
+  emulator.load(FONT, START_ADDRESS);
+  test.assertEqual(emulator.getOpcode().word, 0xF090);
+}
+
+function test_getOperation() {
+  let emulator = new Emulator();
+  test.assertRaises(RangeError, emulator.getOperation.bind(emulator), 0);
+  for (let value of [0x00E0, 0x00EE]) {
+    test.assertEqual(typeof emulator.getOperation(new Opcode(value)), 'function');
+  }
+  for (let i = 0x1; i < 0xE; i++) {
+    test.assertEqual(typeof emulator.getOperation(new Opcode(i << 12)), 'function');
+  }
+}
+
+function test_clear() {
+  let emulator = new Emulator();
+  for (let x = 0; x < DISPLAY_WIDTH; x++) {
+    for (let y = 0; y < DISPLAY_HEIGHT; y++) {
+      test.assertFalse(emulator.frameBuffer[x][y]);
+    }
+    emulator.frameBuffer[x].fill(true);
+  }
+  for (let x = 0; x < DISPLAY_WIDTH; x++) {
+    for (let y = 0; y < DISPLAY_HEIGHT; y++) {
+      test.assertTrue(emulator.frameBuffer[x][y]);
+    }
+  }
+  emulator.clear(new Opcode(0x00E0));
+  for (let x = 0; x < DISPLAY_WIDTH; x++) {
+    for (let y = 0; y < DISPLAY_HEIGHT; y++) {
+      test.assertFalse(emulator.frameBuffer[x][y]);
+    }
+  }
+}
+
+function test_functionReturn() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  emulator.functionReturn(new Opcode(0x00EE));
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  emulator.stack.push(START_ADDRESS);
+  emulator.stack.push(0);
+  emulator.functionReturn(new Opcode(0x00EE));
+  test.assertEqual(emulator.programCounter, 0);
+  emulator.functionReturn(new Opcode(0x00EE));
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+}
+
+function test_goto() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  emulator.goto(new Opcode(0x1234));
+  test.assertEqual(emulator.programCounter, 0x234);
+  emulator.goto(new Opcode(0x1200));
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+}
+
+function test_call() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.stack, []);
+  emulator.call(new Opcode(0x2345));
+  test.assertEqual(emulator.programCounter, 0x345);
+  test.assertEqual(emulator.stack, [START_ADDRESS]);
+}
+
+function test_skipEqual() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.skipEqual(new Opcode(0x3001));
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.skipEqual(new Opcode(0x3000));
+  test.assertEqual(emulator.programCounter, START_ADDRESS + OPCODE_SIZE);
+}
+
+function test_skipNotEqual() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.skipNotEqual(new Opcode(0x4000));
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.skipNotEqual(new Opcode(0x4001));
+  test.assertEqual(emulator.programCounter, START_ADDRESS + OPCODE_SIZE);
+}
+
+function test_skipXYEqual() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.register[1] = 42;
+  emulator.skipXYEqual(new Opcode(0x5010));
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.register[1] = 0;
+  emulator.skipXYEqual(new Opcode(0x5010));
+  test.assertEqual(emulator.programCounter, START_ADDRESS + OPCODE_SIZE);
+}
+
+function test_setX() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[0], 0);
+  emulator.setX(new Opcode(0x6012));
+  test.assertEqual(emulator.register[0], 0x12);
+}
+
+function test_addToX() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[0], 0);
+  emulator.addToX(new Opcode(0x7012));
+  test.assertEqual(emulator.register[0], 0x12);
+  emulator.addToX(new Opcode(0x7034));
+  test.assertEqual(emulator.register[0], 0x12 + 0x34);
+  emulator.addToX(new Opcode(0x7056));
+  test.assertEqual(emulator.register[0], 0x12 + 0x34 + 0x56);
+}
+
+function test_setXToY() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[0], 0);
+  emulator.register[1] = 42;
+  emulator.setXToY(new Opcode(0x8010));
+  test.assertEqual(emulator.register[0], 42);
+}
+
+function test_bitwiseOr() {
+  let emulator = new Emulator();
+  emulator.register[0] = 0x4;
+  emulator.register[1] = 0x2;
+  emulator.bitwiseOr(new Opcode(0x8011));
+  test.assertEqual(emulator.register[0], 0x6);
+  test.assertEqual(emulator.register[1], 0x2);
+}
+
+function test_bitwiseAnd() {
+  let emulator = new Emulator();
+  emulator.register[0] = 0x4;
+  emulator.register[1] = 0x2;
+  emulator.bitwiseAnd(new Opcode(0x8012));
+  test.assertEqual(emulator.register[0], 0);
+  test.assertEqual(emulator.register[1], 0x2);
+}
+
+function test_bitwiseXor() {
+  let emulator = new Emulator();
+  emulator.register[0] = 0x6;
+  emulator.register[1] = 0x2;
+  emulator.bitwiseXor(new Opcode(0x8013));
+  test.assertEqual(emulator.register[0], 0x4);
+  test.assertEqual(emulator.register[1], 0x2);
+}
+
+function test_addYToX() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[15], 0);
+  emulator.register[0] = 0xFE;
+  emulator.register[1] = 0x1;
+  emulator.addYToX(new Opcode(0x8014));
+  test.assertEqual(emulator.register[0], 0xFF);
+  test.assertEqual(emulator.register[1], 0x1);
+  test.assertEqual(emulator.register[15], 0);
+  emulator.addYToX(new Opcode(0x8014));
+  test.assertEqual(emulator.register[0], 0);
+  test.assertEqual(emulator.register[1], 0x1);
+  test.assertEqual(emulator.register[15], 1);
+}
+
+function test_subtractYFromX() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[15], 0);
+  emulator.register[0] = 0x1;
+  emulator.register[1] = 0x1;
+  emulator.subtractYFromX(new Opcode(0x8015));
+  test.assertEqual(emulator.register[0], 0);
+  test.assertEqual(emulator.register[1], 0x1);
+  test.assertEqual(emulator.register[15], 1);
+  emulator.subtractYFromX(new Opcode(0x8015));
+  test.assertEqual(emulator.register[0], 0xFF);
+  test.assertEqual(emulator.register[1], 0x1);
+  test.assertEqual(emulator.register[15], 0);
+}
+
+function test_shiftRight() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[15], 0);
+  emulator.register[0] = 0x5;
+  emulator.shiftRight(new Opcode(0x8016));
+  test.assertEqual(emulator.register[0], 2);
+  test.assertEqual(emulator.register[15], 1);
+  emulator.shiftRight(new Opcode(0x8016));
+  test.assertEqual(emulator.register[0], 1);
+  test.assertEqual(emulator.register[15], 0);
+}
+
+function test_subtractXFromY() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[15], 0);
+  emulator.register[0] = 0x1;
+  emulator.register[1] = 0x1;
+  emulator.subtractXFromY(new Opcode(0x8017));
+  test.assertEqual(emulator.register[0], 0);
+  test.assertEqual(emulator.register[1], 1);
+  test.assertEqual(emulator.register[15], 1);
+
+  emulator.register[0] = 0x2;
+  emulator.register[1] = 0x1;
+  emulator.subtractXFromY(new Opcode(0x8017));
+  test.assertEqual(emulator.register[0], 0xFF);
+  test.assertEqual(emulator.register[1], 1);
+  test.assertEqual(emulator.register[15], 0);
+}
+
+function test_shiftLeft() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[15], 0);
+  emulator.register[0] = 0x87;
+  emulator.shiftLeft(new Opcode(0x801E));
+  test.assertEqual(emulator.register[0], 0x0E);
+  test.assertEqual(emulator.register[15], 1);
+  emulator.shiftLeft(new Opcode(0x801E));
+  test.assertEqual(emulator.register[0], 0x1C);
+  test.assertEqual(emulator.register[15], 0);
+}
+
+function test_skipXYNotEqual() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  test.assertEqual(emulator.register[1], 0);
+  emulator.skipXYNotEqual(new Opcode(0x9010));
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.register[1] = 42;
+  emulator.skipXYNotEqual(new Opcode(0x9010));
+  test.assertEqual(emulator.programCounter, START_ADDRESS + OPCODE_SIZE);
+}
+
+function test_setAddress() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.address, 0);
+  emulator.setAddress(new Opcode(0xABCD));
+  test.assertEqual(emulator.address, 0xBCD);
+}
+
+function test_jump() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.jump(new Opcode(0xBCDE));
+  test.assertEqual(emulator.programCounter, 0xCDE);
+  emulator.register[0] = 0x11;
+  emulator.jump(new Opcode(0xBCDE));
+  test.assertEqual(emulator.programCounter, 0xCEF);
+}
+
+function test_random() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[0], 0);
+  emulator.random(new Opcode(0xC0FF));
+  test.assertTrue(emulator.register[0] >= 0);
+  test.assertTrue(emulator.register[0] < 256);
+  emulator.random(new Opcode(0xC00F));
+  test.assertTrue(emulator.register[0] >= 0);
+  test.assertTrue(emulator.register[0] < 16);
+}
+
+function test_draw() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.address, 0);
+  test.assertEqual(emulator.register[15], 0);
+  for (let x = 0; x < DISPLAY_WIDTH; x++) {
+    for (let y = 0; y < DISPLAY_HEIGHT; y++) {
+      test.assertFalse(emulator.frameBuffer[x][y]);
+    }
+  }
+  emulator.draw(new Opcode(0xD011));
+  test.assertEqual(emulator.address, 0);
+  test.assertEqual(emulator.register[15], 0);
+  for (let x = 0; x < DISPLAY_WIDTH; x++) {
+    if (x < 4) {
+      test.assertTrue(emulator.frameBuffer[x][0]);
+      test.assertTrue(emulator.frameBuffer[x].slice(1).every(e => (!e)));
+    }
+    else {
+      test.assertTrue(emulator.frameBuffer[x].every(e => (!e)));
+    }
+  }
+
+  emulator.address = START_ADDRESS;
+  emulator.draw(new Opcode(0xD011));
+  test.assertEqual(emulator.address, START_ADDRESS);
+  test.assertEqual(emulator.register[15], 1);
+  // Due to the XOR the frame buffer does not change
+  for (let x = 0; x < DISPLAY_WIDTH; x++) {
+    if (x < 4) {
+      test.assertTrue(emulator.frameBuffer[x][0]);
+      test.assertTrue(emulator.frameBuffer[x].slice(1).every(e => (!e)));
+    }
+    else {
+      test.assertTrue(emulator.frameBuffer[x].every(e => (!e)));
+    }
+  }
+
+  emulator.address = 0;
+  emulator.draw(new Opcode(0xD011));
+  test.assertEqual(emulator.address, 0);
+  test.assertEqual(emulator.register[15], 0);
+  for (let x = 0; x < DISPLAY_WIDTH; x++) {
+    test.assertTrue(emulator.frameBuffer[x].every(e => (!e)));
+  }
+}
+
+function test_skipKey() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.skipKey(new Opcode(0xE09E));
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  for (let i = 0x1; i <= 0xF; i++) {
+    emulator.keys.add(i);
+    emulator.skipKey(new Opcode(0xE09E));
+    test.assertEqual(emulator.programCounter, START_ADDRESS);
+    emulator.keys.clear();
+  }
+  emulator.keys.add(emulator.register[0]);
+  emulator.skipKey(new Opcode(0xE09E));
+  test.assertEqual(emulator.programCounter, START_ADDRESS + OPCODE_SIZE);
+}
+
+function test_skipNotKey() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.keys.add(emulator.register[0]);
+  emulator.skipNotKey(new Opcode(0xE0A1));
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
+  emulator.keys.clear();
+  emulator.skipNotKey(new Opcode(0xE0A1));
+  test.assertEqual(emulator.programCounter, START_ADDRESS + OPCODE_SIZE);
+  emulator.keys.add(1);
+  emulator.skipNotKey(new Opcode(0xE0A1));
+  test.assertEqual(emulator.programCounter, START_ADDRESS + OPCODE_SIZE + OPCODE_SIZE);
+}
+
+function test_setXToDelay() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[0], 0);
+  for (let i = 0x00; i <= 0xFF; i++) {
+    emulator.delayTimer = i;
+    emulator.setXToDelay(new Opcode(0xF007));
+    test.assertEqual(emulator.register[0], i);
+  }
+}
+
+function test_wait() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.programCounter, START_ADDRESS)
+  test.assertEqual(emulator.keys.size, 0);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.wait(new Opcode(0xF00A));
+  test.assertEqual(emulator.programCounter, START_ADDRESS - OPCODE_SIZE)
+  test.assertEqual(emulator.keys.size, 0);
+  test.assertEqual(emulator.register[0], 0);
+  emulator.keys.add(1);
+  emulator.wait(new Opcode(0xF00A));
+  test.assertEqual(emulator.programCounter, START_ADDRESS - OPCODE_SIZE)
+  test.assertEqual(emulator.keys.size, 1);
+  test.assertEqual(emulator.register[0], 1);
+}
+
+function test_setDelay() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[0], 0);
+  for (let i = 0x00; i <= 0xFF; i++) {
+    emulator.register[0] = i;
+    emulator.setDelay(new Opcode(0xF015));
+    test.assertEqual(emulator.delayTimer, i);
+  }
+}
+
+function test_setSound() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.register[0], 0);
+  for (let i = 0x00; i <= 0xFF; i++) {
+    emulator.register[0] = i;
+    emulator.setSound(new Opcode(0xF018));
+    test.assertEqual(emulator.soundTimer, i);
+  }
+}
+
+function test_addXToI() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.address, 0);
+  emulator.register[0] = 42;
+  emulator.addXToI(new Opcode(0xF01E));
+  test.assertEqual(emulator.address, 42);
+  emulator.addXToI(new Opcode(0xF01E));
+  test.assertEqual(emulator.address, 84);
+}
+
+function test_getFont() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.address, 0);
+  for (let i = 0x0; i <= 0xF; i++) {
+    emulator.register[0] = i;
+    emulator.getFont(new Opcode(0xF029));
+    test.assertEqual(emulator.address, i * FONT_SIZE);
+  }
+}
+
+function test_bcd() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.address, 0);
+  emulator.register[0] = 123;
+  emulator.bcd(new Opcode(0xF033));
+  test.assertEqual(emulator.memory[0], 1);
+  test.assertEqual(emulator.memory[1], 2);
+  test.assertEqual(emulator.memory[2], 3);
+  emulator.address = 3;
+  emulator.register[1] = 234;
+  emulator.bcd(new Opcode(0xF133));
+  test.assertEqual(emulator.memory[3], 2);
+  test.assertEqual(emulator.memory[4], 3);
+  test.assertEqual(emulator.memory[5], 4);
+}
+
+function test_dumpRegister() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.address, 0);
+  for (let i = 0; i < FONT.length; i++) {
+    test.assertEqual(emulator.memory[i], FONT[i]);
+  }
+  emulator.dumpRegister(new Opcode(0xFF55));
+  for (let i = 0; i < REGISTER_COUNT; i++) {
+    test.assertEqual(emulator.memory[i], 0);
+  }
+  for (let i = REGISTER_COUNT; i < FONT.length; i++) {
+    test.assertEqual(emulator.memory[i], FONT[i]);
+  }
+  emulator.address = REGISTER_COUNT;
+  emulator.dumpRegister(new Opcode(0xF555));
+  for (let i = 0; i <= (REGISTER_COUNT + 5); i++) {
+    test.assertEqual(emulator.memory[i], 0);
+  }
+  for (let i = (REGISTER_COUNT + 6); i < FONT.length; i++) {
+    test.assertEqual(emulator.memory[i], FONT[i]);
+  }
+}
+
+function test_loadRegister() {
+  let emulator = new Emulator();
+  test.assertEqual(emulator.address, 0);
+  for (let i = 0; i < REGISTER_COUNT; i++) {
+    test.assertEqual(emulator.register[i], 0);
+  }
+  emulator.loadRegister(new Opcode(0xFF65));
+  for (let i = 0; i < REGISTER_COUNT; i++) {
+    test.assertEqual(emulator.register[i], FONT[i]);
+  }
+  emulator.address = START_ADDRESS;
+  emulator.loadRegister(new Opcode(0xF565));
+  for (let i = 0; i <= 5; i++) {
+    test.assertEqual(emulator.register[i], 0);
+  }
+  for (let i = 6; i < REGISTER_COUNT; i++) {
+    test.assertEqual(emulator.register[i], FONT[i]);
+  }
+}
+
+test.main();
+</script>
+</body>
+
+</html>
