@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JavaScript CHIP-8 emulator</title>
+  <script src="../../../jsgame0.js"></script>
+  <script src="chip8.js"></script>
+  <style type="text/css" media="screen">
+body {
+  background-color: white;
+  color: black;
+}
+.hidden {
+  display: none;
+}
+form {
+  display: block;
+  margin: 1em;
+}
+  </style>
+</head>
+
+<body>
+
+<main>
+<h1>JavaScript CHIP-8 emulator</h1>
+
+<form id="romLoader" name="romLoader">
+  <label for="rom">ROM file:</label>
+  <input type="file" id="rom" name="rom">
+</form>
+
+<canvas id="screen">
+The game screen appears here if your browser supports the Canvas API.
+</canvas>
+<section id="controls">
+  <button type="button" id="reset">Reset</button>
+  <button type="button" id="pause">Pause</button>
+</section>
+
+<p>Use "Browse..." to select and load a CHIP-8 ROM file.</p>
+
+<h2>ROMs</h2>
+
+<ul>
+  <li><a href="https://github.com/loktar00/chip8/tree/master/roms">loktar00 roms</a></li>
+  <li><a href="https://johnearnest.github.io/chip8Archive/">CHIP-8 Archive</a></li>
+</ul>
+
+<h2>References</h2>
+
+<ul>
+  <li><a href="https://en.wikipedia.org/wiki/CHIP-8">Wikipedia: CHIP-8</a></li>
+  <li><a href="https://github.com/mattmikolay/chip-8/wiki/CHIP%E2%80%908-Technical-Reference">CHIP-8 Technical Reference</a></li>
+  <li><a href="https://github.com/daniel5151/AC8E/blob/master/roms/bc_test.txt">Error codes for bc_test.ch8</a></li>
+</ul>
+
+</main>
+
+<script>
+/*
+ * Integer amount to multiply the original display resolution.
+ */
+const SCALING = 10;
+
+WIDTH = DISPLAY_WIDTH * SCALING;
+HEIGHT = DISPLAY_HEIGHT * SCALING;
+
+var emulator, rom;
+
+function reset() {
+  emulator = new Emulator();
+  if (rom != null) {
+    emulator.load(rom, START_ADDRESS);
+  }
+}
+
+function draw() {
+  screen.fill('black');
+
+  for (let x = 0; x < DISPLAY_WIDTH; x++) {
+    for (let y = 0; y < DISPLAY_HEIGHT; y++) {
+      if (emulator.frameBuffer[x][y]) {
+        screen.draw.filled_rect(new Rect(x * SCALING, y * SCALING, SCALING, SCALING), 'white');
+      }
+    }
+  }
+}
+
+function update(dt) {
+  for (let i = 0; i < 8; i++) {
+    emulator.emulateCycle();
+  }
+
+  // CHIP-8 has 2 timers.
+  // They both count down at 60 hertz until they reach 0.
+  emulator.decrementTimers();
+}
+
+function on_key_down(key, mod, unicode) {
+  if ((key === keys.K_0) || (key === keys.KP0)) {
+    emulator.keys.add(0x0);
+  }
+  else if ((key === keys.K_1) || (key === keys.KP1)) {
+    emulator.keys.add(0x1);
+  }
+  else if ((key === keys.K_2) || (key === keys.KP2) || (key === keys.UP)) {
+    emulator.keys.add(0x2);
+  }
+  else if ((key === keys.K_3) || (key === keys.KP3)) {
+    emulator.keys.add(0x3);
+  }
+  else if ((key === keys.K_4) || (key === keys.KP4) || (key === keys.LEFT)) {
+    emulator.keys.add(0x4);
+  }
+  else if ((key === keys.K_5) || (key === keys.KP5)) {
+    emulator.keys.add(0x5);
+  }
+  else if ((key === keys.K_6) || (key === keys.KP6) || (key === keys.RIGHT)) {
+    emulator.keys.add(0x6);
+  }
+  else if ((key === keys.K_7) || (key === keys.KP7)) {
+    emulator.keys.add(0x7);
+  }
+  else if ((key === keys.K_8) || (key === keys.KP8) || (key === keys.DOWN)) {
+    emulator.keys.add(0x8);
+  }
+  else if ((key === keys.K_9) || (key === keys.KP9)) {
+    emulator.keys.add(0x9);
+  }
+  else if (key === keys.A) {
+    emulator.keys.add(0xA);
+  }
+  else if (key === keys.B) {
+    emulator.keys.add(0xB);
+  }
+  else if (key === keys.C) {
+    emulator.keys.add(0xC);
+  }
+  else if (key === keys.D) {
+    emulator.keys.add(0xD);
+  }
+  else if (key === keys.E) {
+    emulator.keys.add(0xE);
+  }
+  else if (key === keys.F) {
+    emulator.keys.add(0xF);
+  }
+}
+
+function on_key_up(key, mod) {
+  if ((key === keys.K_0) || (key === keys.KP0)) {
+    emulator.keys.delete(0x0);
+  }
+  else if ((key === keys.K_1) || (key === keys.KP1)) {
+    emulator.keys.delete(0x1);
+  }
+  else if ((key === keys.K_2) || (key === keys.KP2) || (key === keys.UP)) {
+    emulator.keys.delete(0x2);
+  }
+  else if ((key === keys.K_3) || (key === keys.KP3)) {
+    emulator.keys.delete(0x3);
+  }
+  else if ((key === keys.K_4) || (key === keys.KP4) || (key === keys.LEFT)) {
+    emulator.keys.delete(0x4);
+  }
+  else if ((key === keys.K_5) || (key === keys.KP5)) {
+    emulator.keys.delete(0x5);
+  }
+  else if ((key === keys.K_6) || (key === keys.KP6) || (key === keys.RIGHT)) {
+    emulator.keys.delete(0x6);
+  }
+  else if ((key === keys.K_7) || (key === keys.KP7)) {
+    emulator.keys.delete(0x7);
+  }
+  else if ((key === keys.K_8) || (key === keys.KP8) || (key === keys.DOWN)) {
+    emulator.keys.delete(0x8);
+  }
+  else if ((key === keys.K_9) || (key === keys.KP9)) {
+    emulator.keys.delete(0x9);
+  }
+  else if (key === keys.A) {
+    emulator.keys.delete(0xA);
+  }
+  else if (key === keys.B) {
+    emulator.keys.delete(0xB);
+  }
+  else if (key === keys.C) {
+    emulator.keys.delete(0xC);
+  }
+  else if (key === keys.D) {
+    emulator.keys.delete(0xD);
+  }
+  else if (key === keys.E) {
+    emulator.keys.delete(0xE);
+  }
+  else if (key === keys.F) {
+    emulator.keys.delete(0xF);
+  }
+}
+
+// Load the ROM file when the user selects a file
+const romFile = document.querySelector('#rom');
+romFile.addEventListener('change', (event) => {
+  if ((romFile.files.length > 0) && (romFile.files[0] != null)) {
+    let reader = new FileReader();
+    reader.addEventListener('load', (event) => {
+      rom = new Uint8Array(event.target.result);
+      reset();
+      screen.set_mode('#screen', '#reset', '#pause');
+    });
+    reader.readAsArrayBuffer(romFile.files[0]);
+  }
+});
+</script>
+</body>
+
+</html>
