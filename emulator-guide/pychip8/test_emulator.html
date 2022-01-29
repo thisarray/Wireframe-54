@@ -474,16 +474,16 @@ function test_setXToDelay() {
 
 function test_wait() {
   let emulator = new Emulator();
-  test.assertEqual(emulator.programCounter, START_ADDRESS)
+  test.assertEqual(emulator.programCounter, START_ADDRESS);
   test.assertEqual(emulator.keys.size, 0);
   test.assertEqual(emulator.register[0], 0);
   emulator.wait(new Opcode(0xF00A));
-  test.assertEqual(emulator.programCounter, START_ADDRESS - OPCODE_SIZE)
+  test.assertEqual(emulator.programCounter, START_ADDRESS - OPCODE_SIZE);
   test.assertEqual(emulator.keys.size, 0);
   test.assertEqual(emulator.register[0], 0);
   emulator.keys.add(1);
   emulator.wait(new Opcode(0xF00A));
-  test.assertEqual(emulator.programCounter, START_ADDRESS - OPCODE_SIZE)
+  test.assertEqual(emulator.programCounter, START_ADDRESS - OPCODE_SIZE);
   test.assertEqual(emulator.keys.size, 1);
   test.assertEqual(emulator.register[0], 1);
 }
