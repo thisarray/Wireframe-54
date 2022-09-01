@@ -208,8 +208,7 @@ romFile.addEventListener('change', (event) => {
     let reader = new FileReader();
     reader.addEventListener('load', (event) => {
       rom = new Uint8Array(event.target.result);
-      reset();
-      screen.set_mode('#screen', '#reset', '#pause');
+      screen.init();
     });
     reader.readAsArrayBuffer(romFile.files[0]);
   }
