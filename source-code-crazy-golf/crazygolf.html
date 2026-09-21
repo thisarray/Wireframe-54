@@ -131,8 +131,7 @@ pgzrun.go()
 var collisionMap, pointer, ball, gamestate, shots, shotrange;
 
 function reset() {
-  screen.blit('collision', [0, 0]);
-  collisionMap = screen.getSurface();
+  collisionMap = Surface.fromImage('collision');
   pointer = new Actor('pointer');
   pointer.center = [90, 85];
   pointer.angle = 0;
